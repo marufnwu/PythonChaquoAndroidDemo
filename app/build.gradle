@@ -31,7 +31,8 @@ android {
             pip{
                 options "--upgrade","--ignore-installed","--force-reinstall"
                 install "yt-dlp"
-                install "git+https://github.com/pytube/pytube"
+                //install "git+https://github.com/pytube/pytube"
+                install "../pytube"
             }
         }
         ndk {
