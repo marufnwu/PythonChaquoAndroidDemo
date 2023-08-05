@@ -16,6 +16,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LoadControl
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -27,13 +28,15 @@ import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.example.pythonchaquoandroiddemo.models.StreamData
+import com.example.pythonchaquoandroiddemo.models.ytdlp.YtdlpData
 import com.google.gson.Gson
 
 
-@UnstableApi class MainActivity : AppCompatActivity() {
+@UnstableApi
+class MainActivity : AppCompatActivity() {
     lateinit var playerView: PlayerView
-    lateinit var trackButton:Button
-    private val url  ="https://www.youtube.com/watch?v=iAXymug9VvQ"
+    lateinit var trackButton: Button
+    private val url = "https://www.youtube.com/watch?v=a7V9bUwc4cU"
 
     //Minimum Video you want to buffer while Playing
     val MIN_BUFFER_DURATION = 2000
@@ -46,7 +49,7 @@ import com.google.gson.Gson
 
     //Min video You want to buffer when user resumes video
     val MIN_PLAYBACK_RESUME_BUFFER = 2000
-    private lateinit var downloderModule : PyObject
+    private lateinit var downloderModule: PyObject
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -61,68 +64,42 @@ import com.google.gson.Gson
 
         val py = Python.getInstance()
 
-        var manifest:String? = null;
+        var manifest: String? = null;
         //val player = ExoPlayer.Builder(this)
 
 
-        val testModule = py.getModule("test")
         downloderModule = py.getModule("downloader")
 
-        //val ytdlpModule = py.getModule("ytdl")
+        val ytdlpModule = py.getModule("ytdl")
 
-        val value = testModule.callAttr("getStremData", "https://www.youtube.com/watch?v=22ZsVw4Uz4Y")
-        var audioSource :String? = null
-        var source2 :String ? = null
+
+        val value =
+            ytdlpModule.callAttr("getVideoInfo", "https://www.youtube.com/watch?v=7RJk23Wr_xs")
+
+
+
         try {
-            val jsonStreamData = Gson().fromJson(value.toString(), StreamData::class.java)
-            for (format in jsonStreamData.formats){
-                Log.d("VideoFormat", "info: "+format.qualityLabel+" type "+format.mimeType+" url "+format.url)
-            }
+            val jsonStreamData = Gson().fromJson(value.toString(), YtdlpData::class.java)
 
-            manifest = jsonStreamData.adaptiveFormats[3].url
-            source2 = jsonStreamData.adaptiveFormats[4].url
+            for (format in jsonStreamData.formats) {
 
-            for (format in jsonStreamData.adaptiveFormats){
-                if(format.mimeType.contains("webm")){
-                    Log.d("AdaptiveVideoFormat", "Adaptive info: "+format.qualityLabel+" type "+format.mimeType+" url "+format.url)
-                    if(manifest==null)
-                        manifest = format.url
-                }
+                if(format.video_ext.equals("mp4") && format.protocol.equals("https"))
+                    //here we filter downloadable video, we can use format id for download any specific video
+                    Log.d("VideoFormat", "count: " + format.resolution+" "+format.video_ext+" "+format.format+" "+format.protocol+" "+format.container)
 
-                if(format.mimeType.contains("audio")){
-                    audioSource = format.url
+
+                if (format.manifest_url != null){
+                    if (manifest == null) {
+                        manifest = format.manifest_url
+                    }
                 }
 
             }
-        }catch (e:Exception){
+        } catch (e: Exception) {
+            Log.d("VideoFormat", "count: " + e.message)
+
             e.printStackTrace()
         }
-
-
-        //val value =  ytdlpModule.callAttr("getVideoInfo", "https://www.youtube.com/watch?v=7RJk23Wr_xs")
-
-
-
-//        try {
-//            val jsonStreamData = Gson().fromJson(value.toString(), YtdlpData::class.java)
-//            Log.d("VideoFormat", "count: " + jsonStreamData.formats.size)
-//            for (format in jsonStreamData.formats) {
-//                if (format.manifest_url != null)
-//
-//                    if(manifest==null){
-//                        manifest = format.manifest_url
-//                    }else{
-//                        break
-//                    }
-//
-//
-//            }
-//        } catch (e: Exception) {
-//            Log.d("VideoFormat", "count: " + e.message)
-//
-//            e.printStackTrace()
-//        }
-
 
 
         val dataSourceFactory: DataSource.Factory = CacheDataSource.Factory()
@@ -160,23 +137,17 @@ import com.google.gson.Gson
 
         })
 
-        val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+        val mediaSource = HlsMediaSource.Factory(dataSourceFactory)
             .createMediaSource(MediaItem.fromUri(manifest!!))
 
-        val mediaSource1 = ProgressiveMediaSource.Factory(dataSourceFactory)
-            .createMediaSource(MediaItem.fromUri(source2!!))
-
-        val audioMediaSource1 = ProgressiveMediaSource.Factory(dataSourceFactory)
-            .createMediaSource(MediaItem.fromUri(audioSource!!))
-
-        val mergingMediaSource = MergingMediaSource(mediaSource, audioMediaSource1)
 
 
 
 
 
 
-        player.addMediaSource(mergingMediaSource)
+
+        player.addMediaSource(mediaSource)
 
         playerView.player = player
         player.prepare()
@@ -186,30 +157,38 @@ import com.google.gson.Gson
         trackButton.setOnClickListener {
             val trackSelectionDialog = TrackSelectionDialog.createForPlayer(
                 player
-            ){ dismissedDialog ->
+            ) { dismissedDialog ->
 
             }
-            trackSelectionDialog.show(supportFragmentManager,  null)
+            trackSelectionDialog.show(supportFragmentManager, null)
 
         }
 
         findViewById<Button>(R.id.download)
             .setOnClickListener {
-                downloadVideo(url, "360p")
+                downloadVideo(url, "135")
             }
 
 
     }
 
+    //video download callback
+    //this method fire from downloader.py
+    //customize callback as per your required
+    //like : started for download, failed, or get download percentage, finish etc...
+
     fun onCallback(event: String) {
-        Log.d("PythonCallback", "onCallback: "+event)
+        Log.d("PythonCallback", "onCallback: " + event)
     }
 
-    private fun downloadVideo(url:String, quality:String){
-        val downlaodDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    private fun downloadVideo(url: String, quality: String) { //quality is video format id which is available inside each format
+        val downlaodDir =
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) //use storage permission
 
-        val downloader = downloderModule.callAttr("downloader", url, "mp4", downlaodDir?.absolutePath,
-            "480p", downlaodDir?.path )
+        val downloader = downloderModule.callAttr(
+            "downloader", url, "mp4", downlaodDir?.absolutePath,
+            quality, downlaodDir?.path
+        )
 
         downloader.put("hook", ::onCallback)
         val download = downloader.callAttr("download");
