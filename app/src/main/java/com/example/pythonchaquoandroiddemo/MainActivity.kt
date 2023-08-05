@@ -36,7 +36,7 @@ import com.google.gson.Gson
 class MainActivity : AppCompatActivity() {
     lateinit var playerView: PlayerView
     lateinit var trackButton: Button
-    private val url = "https://www.youtube.com/watch?v=a7V9bUwc4cU"
+    private val url = "https://www.youtube.com/watch?v=qy0oe23QXJ4"
 
     //Minimum Video you want to buffer while Playing
     val MIN_BUFFER_DURATION = 2000
@@ -50,12 +50,33 @@ class MainActivity : AppCompatActivity() {
     //Min video You want to buffer when user resumes video
     val MIN_PLAYBACK_RESUME_BUFFER = 2000
     private lateinit var downloderModule: PyObject
+
+    public lateinit var onVDownloadCallback: OnVDownloadCallback
+
+
+    interface OnVDownloadCallback{
+        fun onError(msg : String)
+        fun onPercentage(msg : String)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         playerView = findViewById(R.id.playerView);
         trackButton = findViewById(R.id.select_tracks_button);
+
+
+        onVDownloadCallback = object : OnVDownloadCallback {
+            override fun onError(msg: String) {
+
+            }
+
+            override fun onPercentage(msg: String) {
+                Log.d("", "onPercentage: "+msg)
+            }
+
+        }
 
 
         if (!Python.isStarted()) {
@@ -166,7 +187,7 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.download)
             .setOnClickListener {
-                downloadVideo(url, "135")
+                downloadVideo(url, "720p")
             }
 
 
@@ -190,7 +211,7 @@ class MainActivity : AppCompatActivity() {
             quality, downlaodDir?.path
         )
 
-        downloader.put("hook", ::onCallback)
+        downloader.put("hook", onVDownloadCallback)
         val download = downloader.callAttr("download");
     }
 

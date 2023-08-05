@@ -7,24 +7,21 @@ import sys
 import json
 
 class downloader:
-    def __init__(self,url, dl_format, directory, max_best_quality, log_path):
+    def __init__(self,url, dl_format, directory, max_best_quality):
         self.url = url
         self.dl_format = dl_format
         self.directory = directory
         self.max_best_quality = max_best_quality
-        self.log_path = log_path
         self.fail = False
         self.stop=False
         self.status = 'Stopped'
-        self.gui_callback = None
+        self.hook = None
 
 
     def download(self):
         self.status='Preparing'
         self.process = Thread(target=self.downloadAction,args=(self.directory,self.dl_format, self.max_best_quality,self.url))
-        
-        if os.path.exists(self.log_path+"/yt.log.txt"):
-            os.remove(self.log_path+"/yt.log.txt")
+     
         try:
             self.process.start()
             return True
@@ -43,7 +40,7 @@ class downloader:
             directory+="/"
         if dl_format == "mp4":
             ydl_opts = {
-                'format': max_best_quality,
+                'format': 'best[height<='+max_best_quality+']',
                 'outtmpl': directory+"%(title)s.%(ext)s",
                 'progress_hooks': [self.my_hook],
             }
@@ -59,23 +56,23 @@ class downloader:
         except ValueError:
             self.fail = True
         except Exception as e:
-            print("error fff",str(e))
             time.sleep(5)
             try:
                 with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                     print("retrying....")
-                    #ydl.download([url])
+                    ydl.download([url])
             except Exception as e:
                 print("error fff",str(e))
                 self.fail = True
                 
                 
             
-    def my_hook(self,d):
+    def my_hook(self, d):
         #inside d (type DICT) variable various information is avialable for downloading video
         print("Hook", d)
+        print("gui_callback", self.hook)
         if self.hook:
-            self.hook(d['status'])
+            self.hook.onPercentage(d['_percent_str'])
 
         if d['status'] == 'downloading':
             self.status=d['_percent_str']
